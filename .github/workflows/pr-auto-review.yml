@@ -1,0 +1,183 @@
+name: PR Auto Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  auto-review:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install flake8 black isort bandit safety mypy
+
+      - name: Run Code Quality Checks
+        id: quality-check
+        run: |
+          echo "## 🔍 자동 코드 리뷰 결과" > review_results.md
+          echo "" >> review_results.md
+
+          # Flake8 linting
+          echo "### 📝 코드 스타일 검사 (Flake8)" >> review_results.md
+          if flake8 backend/ --max-line-length=88 --extend-ignore=E203,W503 > flake8_results.txt 2>&1; then
+            echo "✅ 코드 스타일 검사 통과" >> review_results.md
+          else
+            echo "❌ 코드 스타일 문제 발견:" >> review_results.md
+            echo '```' >> review_results.md
+            head -20 flake8_results.txt >> review_results.md
+            echo '```' >> review_results.md
+          fi
+          echo "" >> review_results.md
+
+          # Black formatting check
+          echo "### 🎨 코드 포맷팅 검사 (Black)" >> review_results.md
+          if black --check backend/ > black_results.txt 2>&1; then
+            echo "✅ 코드 포맷팅 검사 통과" >> review_results.md
+          else
+            echo "❌ 코드 포맷팅 문제 발견:" >> review_results.md
+            echo '```' >> review_results.md
+            head -10 black_results.txt >> review_results.md
+            echo '```' >> review_results.md
+            echo "" >> review_results.md
+            echo "💡 해결 방법: \`black backend/\` 명령어를 실행하세요." >> review_results.md
+          fi
+          echo "" >> review_results.md
+
+          # Import sorting check
+          echo "### 📦 Import 정렬 검사 (isort)" >> review_results.md
+          if isort --check-only backend/ > isort_results.txt 2>&1; then
+            echo "✅ Import 정렬 검사 통과" >> review_results.md
+          else
+            echo "❌ Import 정렬 문제 발견:" >> review_results.md
+            echo "💡 해결 방법: \`isort backend/\` 명령어를 실행하세요." >> review_results.md
+          fi
+          echo "" >> review_results.md
+
+          # Security check
+          echo "### 🔒 보안 검사 (Bandit)" >> review_results.md
+          if bandit -r backend/ -f json -o bandit_results.json > /dev/null 2>&1; then
+            if [ -s bandit_results.json ] && [ "$(jq '.results | length' bandit_results.json 2>/dev/null || echo 0)" -gt 0 ]; then
+              echo "⚠️ 보안 이슈 발견:" >> review_results.md
+              echo "자세한 내용은 보안 검사 결과를 확인하세요." >> review_results.md
+            else
+              echo "✅ 보안 검사 통과" >> review_results.md
+            fi
+          else
+            echo "❓ 보안 검사 실행 실패" >> review_results.md
+          fi
+          echo "" >> review_results.md
+
+          # Dependency check
+          echo "### 📋 의존성 보안 검사 (Safety)" >> review_results.md
+          if safety check --json > safety_results.json 2>&1; then
+            echo "✅ 의존성 보안 검사 통과" >> review_results.md
+          else
+            echo "⚠️ 취약한 의존성 발견:" >> review_results.md
+            if [ -f safety_results.json ]; then
+              echo "자세한 내용은 보안 검사 결과를 확인하세요." >> review_results.md
+            fi
+          fi
+          echo "" >> review_results.md
+
+      - name: Get PR Files
+        uses: actions/github-script@v7
+        id: pr-files
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const prNumber = context.issue.number;
+
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner,
+              repo,
+              pull_number: prNumber
+            });
+
+            return files;
+
+      - name: Analyze Code Changes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const { owner, repo } = context.repo;
+            const prNumber = context.issue.number;
+
+            // Read quality check results
+            let reviewContent = '';
+            try {
+              reviewContent = fs.readFileSync('review_results.md', 'utf8');
+            } catch (error) {
+              reviewContent = '## 🔍 자동 코드 리뷰 결과\n\n❌ 코드 품질 검사 실행 중 오류가 발생했습니다.';
+            }
+
+            // Get PR files data
+            const files = JSON.parse('${{ steps.pr-files.outputs.result }}');
+
+            // Add file analysis
+            reviewContent += '\n### 📁 변경된 파일 분석\n\n';
+
+            let hasTests = false;
+            let hasDocumentation = false;
+            let backendChanges = false;
+            let frontendChanges = false;
+
+            files.forEach(file => {
+              const filename = file.filename;
+              if (filename.includes('test')) hasTests = true;
+              if (filename.endsWith('.md')) hasDocumentation = true;
+              if (filename.startsWith('backend/')) backendChanges = true;
+              if (filename.startsWith('frontend/')) frontendChanges = true;
+
+              reviewContent += `- \`${filename}\` (+${file.additions}/-${file.deletions})\n`;
+            });
+
+            reviewContent += '\n### 📋 리뷰 체크포인트\n\n';
+
+            // Backend specific checks
+            if (backendChanges) {
+              reviewContent += '#### Backend 변경사항\n';
+              reviewContent += hasTests ? '✅ 테스트 파일이 포함되어 있습니다.\n' : '❌ 테스트 파일이 누락되었습니다. 새로운 기능이나 변경사항에 대한 테스트를 추가해주세요.\n';
+              reviewContent += '- [ ] API 엔드포인트 변경 시 문서 업데이트 확인\n';
+              reviewContent += '- [ ] 데이터베이스 스키마 변경 시 마이그레이션 스크립트 확인\n';
+              reviewContent += '- [ ] 환경변수 추가 시 .env.example 업데이트 확인\n\n';
+            }
+
+            // Frontend specific checks
+            if (frontendChanges) {
+              reviewContent += '#### Frontend 변경사항\n';
+              reviewContent += '- [ ] UI/UX 변경 시 스크린샷 또는 데모 확인\n';
+              reviewContent += '- [ ] 반응형 디자인 고려 확인\n';
+              reviewContent += '- [ ] 접근성 가이드라인 준수 확인\n\n';
+            }
+
+            // General checks
+            reviewContent += '#### 일반 체크포인트\n';
+            reviewContent += hasDocumentation ? '✅ 문서가 업데이트되었습니다.\n' : '❓ 문서 업데이트가 필요한지 확인해주세요.\n';
+            reviewContent += '- [ ] 코드에 충분한 주석이 포함되어 있는가?\n';
+            reviewContent += '- [ ] 예외 처리가 적절히 구현되어 있는가?\n';
+            reviewContent += '- [ ] 성능에 영향을 주는 변경사항이 있는가?\n';
+            reviewContent += '- [ ] 보안 취약점은 없는가?\n\n';
+
+            reviewContent += '---\n*이 리뷰는 자동으로 생성되었습니다. 추가적인 수동 리뷰가 필요합니다.*';
+
+            // Post review comment
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: prNumber,
+              body: reviewContent
+            });
+
+            console.log('Auto review comment posted successfully');

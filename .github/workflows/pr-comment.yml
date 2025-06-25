@@ -1,0 +1,71 @@
+name: PR Auto Comment
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+jobs:
+  comment:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Add PR Comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prComment = `
+            ## 🎉 새로운 Pull Request가 생성되었습니다!
+
+            안녕하세요 @${{ github.actor }}님! PR을 생성해 주셔서 감사합니다.
+
+            ### 📋 리뷰 체크리스트
+            리뷰어는 다음 사항들을 확인해 주세요:
+
+            - [ ] 코드가 프로젝트 스타일 가이드를 따르는가?
+            - [ ] 새로운 기능에 대한 테스트가 포함되어 있는가?
+            - [ ] 모든 테스트가 통과하는가?
+            - [ ] Breaking changes가 있다면 문서화되어 있는가?
+            - [ ] 보안상 문제가 없는가?
+
+            ### 🧪 테스트 현황
+            - 자동 테스트가 실행 중입니다. 결과를 확인해 주세요.
+            - 테스트 실패 시 [Tests] 탭에서 자세한 내용을 확인할 수 있습니다.
+
+            ### 📖 추가 정보
+            - [개발 가이드라인](.cursor/rules/development-policy.mdc)
+            - [GitHub 관리 규칙](.cursor/rules/github-management.mdc)
+
+            리뷰 완료 후 승인해 주시면 24시간 내에 머지될 예정입니다.
+
+            ---
+            *이 댓글은 자동으로 생성되었습니다.*
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: prComment
+            });
+
+      - name: Add Test Status Comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const testStatusComment = `
+            ## 🔄 자동 테스트 실행 중...
+
+            현재 다음 테스트들이 실행 중입니다:
+            - Backend 테스트 (Python 3.9, 3.10, 3.11)
+            - Frontend 테스트
+            - 코드 커버리지 분석
+
+            결과는 곧 업데이트됩니다. ⏳
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: testStatusComment
+            });

@@ -1,0 +1,215 @@
+name: Issue Auto Labeler
+
+on:
+  issues:
+    types: [opened, reopened, edited]
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Auto Label Issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issueNumber = context.issue.number;
+            const issueTitle = context.payload.issue.title;
+            const issueBody = context.payload.issue.body || '';
+
+            let labels = new Set();
+
+            // Analyze title and body text
+            const text = (issueTitle + ' ' + issueBody).toLowerCase();
+
+            // Type-based labeling
+            if (text.includes('[bug]') || text.includes('bug') || text.includes('error') ||
+                text.includes('fail') || text.includes('broken') || text.includes('crash')) {
+              labels.add('bug');
+              labels.add('type/bug');
+            }
+
+            if (text.includes('[feature]') || text.includes('feature') || text.includes('add ') ||
+                text.includes('implement') || text.includes('new ')) {
+              labels.add('enhancement');
+              labels.add('type/feature');
+            }
+
+            if (text.includes('[question]') || text.includes('question') || text.includes('help') ||
+                text.includes('how to') || text.includes('how do')) {
+              labels.add('question');
+              labels.add('type/question');
+            }
+
+            if (text.includes('[docs]') || text.includes('documentation') || text.includes('readme') ||
+                text.includes('guide') || text.includes('tutorial')) {
+              labels.add('documentation');
+              labels.add('type/documentation');
+            }
+
+            if (text.includes('enhancement') || text.includes('improve') || text.includes('optimize') ||
+                text.includes('better') || text.includes('upgrade')) {
+              labels.add('enhancement');
+              labels.add('type/enhancement');
+            }
+
+            // Priority-based labeling
+            if (text.includes('critical') || text.includes('urgent') || text.includes('production') ||
+                text.includes('security') || text.includes('data loss')) {
+              labels.add('priority/critical');
+            } else if (text.includes('important') || text.includes('high priority') || text.includes('asap')) {
+              labels.add('priority/high');
+            } else if (text.includes('minor') || text.includes('low priority') || text.includes('nice to have')) {
+              labels.add('priority/low');
+            } else {
+              labels.add('priority/medium'); // default priority
+            }
+
+            // Component-based labeling
+            if (text.includes('backend') || text.includes('api') || text.includes('server') ||
+                text.includes('database') || text.includes('fastapi') || text.includes('python')) {
+              labels.add('component/backend');
+            }
+
+            if (text.includes('frontend') || text.includes('ui') || text.includes('ux') ||
+                text.includes('interface') || text.includes('streamlit') || text.includes('web')) {
+              labels.add('component/frontend');
+            }
+
+            if (text.includes('test') || text.includes('testing') || text.includes('pytest') ||
+                text.includes('coverage') || text.includes('automation')) {
+              labels.add('component/tests');
+            }
+
+            if (text.includes('docs') || text.includes('documentation') || text.includes('readme') ||
+                text.includes('wiki') || text.includes('guide')) {
+              labels.add('component/docs');
+            }
+
+            if (text.includes('ci') || text.includes('cd') || text.includes('deployment') ||
+                text.includes('github actions') || text.includes('pipeline')) {
+              labels.add('component/ci-cd');
+            }
+
+            // Complexity/Size labeling
+            const wordCount = text.split(' ').length;
+            if (wordCount < 50) {
+              labels.add('size/small');
+            } else if (wordCount < 150) {
+              labels.add('size/medium');
+            } else {
+              labels.add('size/large');
+            }
+
+            // Status labeling
+            labels.add('status/triaged');
+
+            // Special condition labeling
+            if (text.includes('security') || text.includes('vulnerability') || text.includes('exploit')) {
+              labels.add('security');
+            }
+
+            if (text.includes('performance') || text.includes('slow') || text.includes('memory') ||
+                text.includes('cpu') || text.includes('optimization')) {
+              labels.add('performance');
+            }
+
+            if (text.includes('config') || text.includes('configuration') || text.includes('setting') ||
+                text.includes('environment')) {
+              labels.add('configuration');
+            }
+
+            if (text.includes('dependency') || text.includes('package') || text.includes('library') ||
+                text.includes('requirements')) {
+              labels.add('dependencies');
+            }
+
+            // OS/Platform specific
+            if (text.includes('windows')) {
+              labels.add('platform/windows');
+            }
+            if (text.includes('mac') || text.includes('macos')) {
+              labels.add('platform/macos');
+            }
+            if (text.includes('linux')) {
+              labels.add('platform/linux');
+            }
+
+            // Convert Set to Array
+            const labelsArray = Array.from(labels);
+
+            try {
+              // Add labels to issue
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                labels: labelsArray
+              });
+
+              console.log(`Added labels to issue #${issueNumber}: ${labelsArray.join(', ')}`);
+
+              // Add labeling notification comment
+              const labelComment = `
+              ## 🏷️ 자동 라벨링 완료
+
+              다음 라벨들이 자동으로 추가되었습니다:
+              ${labelsArray.map(label => `- \`${label}\``).join('\n')}
+
+              ### 🎯 라벨링 기준
+              - **타입**: 제목과 내용의 키워드 분석
+              - **우선순위**: 긴급성 키워드 검색
+              - **컴포넌트**: 관련 기술/영역 키워드 검색
+              - **크기**: 이슈 설명 길이 기반 (${text.split(' ').length} 단어)
+
+              ### 📝 라벨 수정
+              라벨이 부정확한 경우:
+              1. 우측 사이드바의 "Labels" 섹션에서 수정
+              2. 부적절한 라벨 제거 또는 누락된 라벨 추가
+              3. 댓글로 라벨 변경 이유를 설명 (선택사항)
+
+              ### 📋 주요 라벨 의미
+              - \`priority/*\`: 처리 우선순위
+              - \`type/*\`: 이슈 유형
+              - \`component/*\`: 관련 컴포넌트/영역
+              - \`size/*\`: 이슈 복잡도/크기
+              - \`status/*\`: 현재 처리 상태
+
+              ---
+              *이 라벨들은 자동으로 추가되었습니다.*
+              `;
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                body: labelComment
+              });
+
+            } catch (error) {
+              console.log(`Labeling error: ${error.message}`);
+
+              // Add error comment
+              const errorComment = `
+              ## ⚠️ 자동 라벨링 실패
+
+              라벨 추가 중 오류가 발생했습니다.
+
+              ### 🔍 감지된 정보
+              - **추천 라벨**: ${labelsArray.map(l => `\`${l}\``).join(', ')}
+              - **오류**: ${error.message}
+
+              프로젝트 관리자가 수동으로 적절한 라벨을 추가해 드릴 예정입니다.
+
+              ---
+              *@project-maintainer 님, 이 이슈에 라벨을 추가해 주세요.*
+              `;
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                body: errorComment
+              });
+            }

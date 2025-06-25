@@ -1,0 +1,33 @@
+# Global owners
+* @project-maintainer
+
+# Backend code
+/backend/ @backend-maintainer @backend-team-lead
+/backend/app/ @backend-maintainer
+/backend/tests/ @qa-maintainer @backend-maintainer
+
+# Frontend code
+/frontend/ @frontend-maintainer @frontend-team-lead
+
+# Documentation
+/docs/ @docs-maintainer
+*.md @docs-maintainer
+README.md @project-maintainer @docs-maintainer
+
+# CI/CD and GitHub configuration
+/.github/ @devops-maintainer @project-maintainer
+/.github/workflows/ @devops-maintainer
+
+# Configuration files
+*.yml @devops-maintainer
+*.yaml @devops-maintainer
+*.json @devops-maintainer
+requirements.txt @backend-maintainer
+.gitignore @project-maintainer
+
+# Security sensitive files
+.env* @security-maintainer @project-maintainer
+/secrets/ @security-maintainer
+
+# Cursor configuration
+/.cursor/ @project-maintainer

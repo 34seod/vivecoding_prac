@@ -1,0 +1,129 @@
+name: PR Auto Assigner
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+jobs:
+  assign:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assign Reviewers
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const prNumber = context.issue.number;
+            const author = context.payload.pull_request.user.login;
+
+            // Get files changed in the PR
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner,
+              repo,
+              pull_number: prNumber
+            });
+
+            // Define code owners based on file paths
+            const codeOwners = {
+              'backend/': ['backend-team-lead'],
+              'frontend/': ['frontend-team-lead'],
+              'docs/': ['docs-maintainer'],
+              '.github/': ['devops-lead'],
+              'tests/': ['qa-lead']
+            };
+
+            // Default reviewers (adjust as needed)
+            const defaultReviewers = ['project-maintainer'];
+
+            let reviewers = new Set(defaultReviewers);
+            let assignees = new Set([author]);
+
+            // Add reviewers based on changed files
+            files.forEach(file => {
+              const filePath = file.filename;
+              Object.entries(codeOwners).forEach(([path, owners]) => {
+                if (filePath.startsWith(path)) {
+                  owners.forEach(owner => {
+                    if (owner !== author) {
+                      reviewers.add(owner);
+                    }
+                  });
+                }
+              });
+            });
+
+            // Convert Sets to Arrays and filter out non-existent users
+            const reviewersList = Array.from(reviewers).filter(user => user !== author);
+            const assigneesList = Array.from(assignees);
+
+            try {
+              // Assign reviewers
+              if (reviewersList.length > 0) {
+                await github.rest.pulls.requestReviewers({
+                  owner,
+                  repo,
+                  pull_number: prNumber,
+                  reviewers: reviewersList
+                });
+
+                console.log(`Assigned reviewers: ${reviewersList.join(', ')}`);
+              }
+
+              // Assign assignees
+              await github.rest.issues.addAssignees({
+                owner,
+                repo,
+                issue_number: prNumber,
+                assignees: assigneesList
+              });
+
+              console.log(`Assigned assignees: ${assigneesList.join(', ')}`);
+
+              // Add assignment comment
+              const assignmentComment = `
+              ## 👥 자동 할당 완료
+
+              ### 할당된 리뷰어
+              ${reviewersList.map(reviewer => `- @${reviewer}`).join('\n')}
+
+              ### 할당된 담당자
+              ${assigneesList.map(assignee => `- @${assignee}`).join('\n')}
+
+              변경된 파일 경로를 기반으로 적절한 리뷰어가 자동 할당되었습니다.
+              추가 리뷰어가 필요한 경우 수동으로 추가해 주세요.
+
+              ---
+              *이 할당은 자동으로 수행되었습니다.*
+              `;
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: prNumber,
+                body: assignmentComment
+              });
+
+            } catch (error) {
+              console.log(`Assignment error: ${error.message}`);
+
+              // Add error comment
+              const errorComment = `
+              ## ⚠️ 자동 할당 실패
+
+              일부 사용자를 찾을 수 없어 자동 할당에 실패했습니다.
+              수동으로 리뷰어를 할당해 주세요.
+
+              변경된 파일 경로:
+              ${files.map(file => `- \`${file.filename}\``).join('\n')}
+              `;
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: prNumber,
+                body: errorComment
+              });
+            }

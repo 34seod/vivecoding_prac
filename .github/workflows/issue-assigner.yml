@@ -1,0 +1,159 @@
+name: Issue Auto Assigner
+
+on:
+  issues:
+    types: [opened, reopened]
+
+jobs:
+  assign:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Assign Issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issueNumber = context.issue.number;
+            const issueTitle = context.payload.issue.title;
+            const issueBody = context.payload.issue.body || '';
+            const author = context.payload.issue.user.login;
+
+            // Define assignee mapping based on issue type and keywords
+            const assigneeMapping = {
+              // Component-based assignment
+              'backend': ['backend-maintainer'],
+              'frontend': ['frontend-maintainer'],
+              'api': ['backend-maintainer'],
+              'database': ['backend-maintainer'],
+              'ui': ['frontend-maintainer'],
+              'ux': ['frontend-maintainer'],
+              'docs': ['docs-maintainer'],
+              'documentation': ['docs-maintainer'],
+              'ci': ['devops-maintainer'],
+              'cd': ['devops-maintainer'],
+              'deployment': ['devops-maintainer'],
+              'security': ['security-maintainer'],
+              'performance': ['backend-maintainer'],
+              'test': ['qa-maintainer'],
+              'testing': ['qa-maintainer']
+            };
+
+            // Default assignees for different issue types
+            const defaultAssignees = {
+              'bug': ['project-maintainer'],
+              'feature': ['product-manager'],
+              'enhancement': ['product-manager'],
+              'question': ['community-manager'],
+              'documentation': ['docs-maintainer']
+            };
+
+            let assignees = new Set();
+            let issueType = 'general';
+
+            // Analyze issue title and body for keywords
+            const text = (issueTitle + ' ' + issueBody).toLowerCase();
+
+            // Determine issue type
+            if (text.includes('[bug]') || text.includes('bug') || text.includes('error') || text.includes('fail')) {
+              issueType = 'bug';
+            } else if (text.includes('[feature]') || text.includes('feature') || text.includes('enhancement')) {
+              issueType = 'feature';
+            } else if (text.includes('[question]') || text.includes('question') || text.includes('help')) {
+              issueType = 'question';
+            } else if (text.includes('[docs]') || text.includes('documentation')) {
+              issueType = 'documentation';
+            }
+
+            // Add default assignees based on issue type
+            if (defaultAssignees[issueType]) {
+              defaultAssignees[issueType].forEach(assignee => assignees.add(assignee));
+            } else {
+              assignees.add('project-maintainer'); // fallback
+            }
+
+            // Add component-specific assignees
+            Object.entries(assigneeMapping).forEach(([keyword, maintainers]) => {
+              if (text.includes(keyword)) {
+                maintainers.forEach(maintainer => assignees.add(maintainer));
+              }
+            });
+
+            // Add author as assignee if they are not external contributor
+            // (You can modify this logic based on your team structure)
+            assignees.add(author);
+
+            // Convert Set to Array and filter out duplicates
+            const assigneesList = Array.from(assignees);
+
+            try {
+              // Assign the issue
+              await github.rest.issues.addAssignees({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                assignees: assigneesList
+              });
+
+              console.log(`Assigned issue #${issueNumber} to: ${assigneesList.join(', ')}`);
+
+              // Add assignment notification comment
+              const assignmentComment = `
+              ## 👤 자동 할당 완료
+
+              ### 할당된 담당자
+              ${assigneesList.map(assignee => `- @${assignee}`).join('\n')}
+
+              ### 할당 기준
+              - **이슈 타입**: \`${issueType}\`
+              - **감지된 키워드**: ${Object.keys(assigneeMapping).filter(keyword => text.includes(keyword)).map(k => `\`${k}\``).join(', ') || '없음'}
+
+              ### 💡 할당 변경
+              담당자가 적절하지 않다면:
+              1. 우측 사이드바에서 "Assignees" 섹션을 클릭
+              2. 적절한 담당자로 변경하거나 추가
+              3. 필요시 댓글로 @멘션하여 알림
+
+              ### 📅 예상 응답 시간
+              - **Bug**: 24시간 내 첫 응답
+              - **Feature/Enhancement**: 72시간 내 첫 응답
+              - **Question**: 48시간 내 첫 응답
+              - **Documentation**: 72시간 내 첫 응답
+
+              ---
+              *이 할당은 자동으로 수행되었습니다.*
+              `;
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                body: assignmentComment
+              });
+
+            } catch (error) {
+              console.log(`Assignment error: ${error.message}`);
+
+              // Add error notification
+              const errorComment = `
+              ## ⚠️ 자동 할당 실패
+
+              일부 사용자를 찾을 수 없어 자동 할당에 실패했습니다.
+
+              ### 📋 감지된 정보
+              - **이슈 타입**: \`${issueType}\`
+              - **시도한 할당**: ${assigneesList.map(a => `@${a}`).join(', ')}
+
+              프로젝트 관리자가 수동으로 적절한 담당자를 할당해 드릴 예정입니다.
+
+              ---
+              *@project-maintainer 님, 이 이슈에 담당자를 할당해 주세요.*
+              `;
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                body: errorComment
+              });
+            }

@@ -1,0 +1,125 @@
+name: ✨ 기능 요청
+description: 새로운 기능을 제안해주세요
+title: "[Feature] "
+labels: ["enhancement", "type/feature", "status/triaged"]
+assignees:
+  - product-manager
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        새로운 기능을 제안해 주셔서 감사합니다! 자세한 설명을 통해 더 나은 기능을 만들어보겠습니다.
+
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: ✨ 기능 설명
+      description: 원하는 기능에 대해 명확하고 간결하게 설명해주세요.
+      placeholder: 어떤 기능을 원하시나요?
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem-solution
+    attributes:
+      label: 🎯 해결하려는 문제
+      description: 이 기능이 해결하려는 문제나 개선하려는 점은 무엇인가요?
+      placeholder: 현재 어떤 문제나 불편함이 있나요?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: 💡 제안하는 해결책
+      description: 어떻게 이 문제를 해결하고 싶으신가요?
+      placeholder: 구체적인 해결 방안을 설명해주세요
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: 🏗️ 관련 컴포넌트
+      description: 어떤 부분의 기능인가요?
+      options:
+        - Backend/API
+        - Frontend/UI
+        - Database
+        - Authentication
+        - File Upload/Download
+        - Configuration
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 📈 우선순위
+      description: 이 기능의 중요도는 어느 정도인가요?
+      options:
+        - High (매우 중요)
+        - Medium (보통)
+        - Low (있으면 좋음)
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-cases
+    attributes:
+      label: 🎭 사용 사례
+      description: 이 기능을 어떤 상황에서 사용하게 될까요?
+      placeholder: |
+        구체적인 사용 시나리오를 설명해주세요:
+        1. 사용자가 ...할 때
+        2. ...를 위해
+        3. ...한 결과를 얻고 싶습니다
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 🔄 고려한 대안
+      description: 다른 해결 방법들을 고려해보셨나요?
+      placeholder: 현재 대안으로 사용하고 있는 방법이나 고려해본 다른 해결책이 있나요?
+
+  - type: textarea
+    id: mockups
+    attributes:
+      label: 🎨 목업/스케치
+      description: UI 변경이 포함된다면 간단한 스케치나 목업을 공유해주세요.
+      placeholder: 이미지를 드래그 앤 드롭하거나 붙여넣기로 추가할 수 있습니다.
+
+  - type: textarea
+    id: technical-notes
+    attributes:
+      label: 🔧 기술적 고려사항
+      description: 구현 시 고려해야 할 기술적 사항이 있나요?
+      placeholder: |
+        - 성능에 미치는 영향
+        - 호환성 이슈
+        - 보안 고려사항
+        - 기타 기술적 요구사항
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: 📝 추가 정보
+      description: 이 기능 요청과 관련된 추가 정보가 있나요?
+      placeholder: 참고 자료, 관련 링크, 기타 컨텍스트를 제공해주세요
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: 체크리스트
+      description: 다음 항목들을 확인해주세요
+      options:
+        - label: 기존 이슈를 검색했고 중복되지 않음을 확인했습니다
+          required: true
+        - label: 이 기능이 프로젝트 범위에 적합하다고 생각합니다
+          required: true
+        - label: 구체적인 사용 사례를 제공했습니다
+          required: true

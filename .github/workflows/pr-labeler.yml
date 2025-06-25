@@ -1,0 +1,156 @@
+name: PR Auto Labeler
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Auto Label PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const prNumber = context.issue.number;
+            const prTitle = context.payload.pull_request.title;
+            const prBody = context.payload.pull_request.body || '';
+
+            // Get files changed in the PR
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner,
+              repo,
+              pull_number: prNumber
+            });
+
+            let labels = new Set();
+
+            // File path based labeling
+            const pathLabels = {
+              'backend/': 'component/backend',
+              'frontend/': 'component/frontend',
+              'docs/': 'component/docs',
+              '.github/': 'component/ci-cd',
+              'tests/': 'component/tests'
+            };
+
+            // Check file paths
+            files.forEach(file => {
+              const filePath = file.filename;
+              Object.entries(pathLabels).forEach(([path, label]) => {
+                if (filePath.startsWith(path)) {
+                  labels.add(label);
+                }
+              });
+            });
+
+            // Title based labeling
+            const titleLower = prTitle.toLowerCase();
+            if (titleLower.includes('[feat]') || titleLower.includes('feature')) {
+              labels.add('type/feature');
+            } else if (titleLower.includes('[fix]') || titleLower.includes('bug')) {
+              labels.add('type/bugfix');
+            } else if (titleLower.includes('[docs]') || titleLower.includes('documentation')) {
+              labels.add('type/documentation');
+            } else if (titleLower.includes('[refactor]') || titleLower.includes('refactor')) {
+              labels.add('type/refactor');
+            } else if (titleLower.includes('[test]') || titleLower.includes('test')) {
+              labels.add('type/test');
+            } else if (titleLower.includes('[chore]') || titleLower.includes('chore')) {
+              labels.add('type/chore');
+            }
+
+            // PR size based labeling
+            const totalChanges = files.reduce((sum, file) => sum + file.additions + file.deletions, 0);
+            if (totalChanges < 50) {
+              labels.add('size/small');
+            } else if (totalChanges < 200) {
+              labels.add('size/medium');
+            } else {
+              labels.add('size/large');
+            }
+
+            // Priority based on keywords
+            const priorityKeywords = {
+              'critical': 'priority/critical',
+              'urgent': 'priority/high',
+              'important': 'priority/high',
+              'minor': 'priority/low'
+            };
+
+            Object.entries(priorityKeywords).forEach(([keyword, label]) => {
+              if (titleLower.includes(keyword) || prBody.toLowerCase().includes(keyword)) {
+                labels.add(label);
+              }
+            });
+
+            // Default priority if none set
+            const hasPriority = Array.from(labels).some(label => label.startsWith('priority/'));
+            if (!hasPriority) {
+              labels.add('priority/medium');
+            }
+
+            // Special labels for specific file types
+            files.forEach(file => {
+              const filePath = file.filename;
+              if (filePath.endsWith('.md')) {
+                labels.add('documentation');
+              }
+              if (filePath.includes('test')) {
+                labels.add('tests');
+              }
+              if (filePath.includes('config') || filePath.includes('.yml') || filePath.includes('.yaml')) {
+                labels.add('configuration');
+              }
+            });
+
+            // Status label
+            labels.add('status/ready-for-review');
+
+            // Convert Set to Array
+            const labelsArray = Array.from(labels);
+
+            try {
+              // Add labels to PR
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: prNumber,
+                labels: labelsArray
+              });
+
+              console.log(`Added labels: ${labelsArray.join(', ')}`);
+
+              // Add labeling comment
+              const labelComment = `
+              ## 🏷️ 자동 라벨링 완료
+
+              다음 라벨들이 자동으로 추가되었습니다:
+              ${labelsArray.map(label => `- \`${label}\``).join('\n')}
+
+              ### 라벨링 기준
+              - **컴포넌트**: 변경된 파일 경로 기반
+              - **타입**: PR 제목의 접두사 기반
+              - **크기**: 변경된 라인 수 기반 (${totalChanges} 라인)
+              - **우선순위**: 제목과 설명의 키워드 기반
+
+              라벨이 부정확한 경우 수동으로 수정해 주세요.
+
+              ---
+              *이 라벨들은 자동으로 추가되었습니다.*
+              `;
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: prNumber,
+                body: labelComment
+              });
+
+            } catch (error) {
+              console.log(`Labeling error: ${error.message}`);
+            }
