@@ -4,8 +4,8 @@ from app.routers import chat
 
 app = FastAPI(
     title="Chat API",
-    description="간단한 채팅 API 서버",
-    version="1.0.0"
+    description="간단한 채팅 API 서버 - GitHub Actions 테스트용",
+    version="1.1.0"
 )
 
 # CORS 설정
@@ -32,3 +32,12 @@ async def root():
 async def health_check():
     """헬스체크 엔드포인트"""
     return {"status": "healthy"}
+
+
+@app.get("/version")
+async def get_version():
+    """버전 정보 엔드포인트"""
+    return {
+        "version": "1.1.0",
+        "description": "GitHub Actions 테스트 버전"
+    }
