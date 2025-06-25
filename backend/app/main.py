@@ -24,10 +24,11 @@ app.include_router(chat.router)
 @app.get("/")
 async def root():
     """루트 엔드포인트"""
-    return {"message": "Chat API Server"}
+    # 의도적 버그: 존재하지 않는 변수 참조
+    return {"message": "Chat API Server", "version": undefined_variable}
 
 
 @app.get("/health")
 async def health_check():
     """헬스체크 엔드포인트"""
-    return {"status": "healthy"} 
+    return {"status": "healthy"}
